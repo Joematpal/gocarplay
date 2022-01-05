@@ -16,25 +16,18 @@ import (
 	"github.com/mzyy94/gocarplay/protocol"
 )
 
-type deviceSize struct {
-	Width  int32 `json:"width"`
-	Height int32 `json:"height"`
-}
-
-type deviceTouch struct {
-	X      float32 `json:"x"`
-	Y      float32 `json:"y"`
-	Action int32   `json:"action"`
-}
-
 var (
 	videoTrack       *webrtc.TrackLocalStaticSample
 	audioDataChannel *webrtc.DataChannel
-	size             deviceSize
+	size             link.ScreenSize
 	fps              int32 = 25
 )
 
 func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+	lnk, err := link.New()
+	if err != nil {
+		return nil, err
+	}
 	// WebRTC setup
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
@@ -95,11 +88,11 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 		switch d.Label() {
 		case "touch":
 			d.OnMessage(func(msg webrtc.DataChannelMessage) {
-				sendTouch(msg.Data)
+				sendTouch(lnk, msg.Data)
 			})
 		case "start":
 			d.OnMessage(func(msg webrtc.DataChannelMessage) {
-				if err := startCarPlay(msg.Data); err != nil {
+				if err := startCarPlay(lnk, msg.Data); err != nil {
 					log.Fatalf("start car play: %v", err)
 				}
 			})
@@ -144,25 +137,21 @@ func webRTCOfferHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&answer)
 }
 
-func sendTouch(data []byte) {
-	var touch deviceTouch
+func sendTouch(lnk *link.Link, data []byte) {
+	var touch link.ScreenTouch
 	if err := json.Unmarshal(data, &touch); err != nil {
 		return
 	}
 
-	link.SendData(&protocol.Touch{X: uint32(touch.X * 10000 / float32(size.Width)), Y: uint32(touch.Y * 10000 / float32(size.Height)), Action: protocol.TouchAction(touch.Action)})
+	lnk.Send(&protocol.Touch{X: uint32(touch.X * 10000 / float32(size.Width)), Y: uint32(touch.Y * 10000 / float32(size.Height)), Action: protocol.TouchAction(touch.Action)})
 }
 
-func startCarPlay(data []byte) error {
+func startCarPlay(lnk *link.Link, data []byte) error {
 	if err := json.Unmarshal(data, &size); err != nil {
 		return err
 	}
 
-	if err := link.Init(); err != nil {
-		return err
-	}
-
-	go link.Communicate(func(data interface{}) {
+	go lnk.Communicate(func(data interface{}) {
 		switch data := data.(type) {
 		case *protocol.VideoData:
 			duration := time.Duration((float32(1) / float32(fps)) * float32(time.Second))
@@ -185,7 +174,6 @@ func startCarPlay(data []byte) error {
 		log.Fatalf("[ERROR] %#v", err)
 	})
 
-	go link.Start(size.Width, size.Height, fps, 160)
 	return nil
 }
 
