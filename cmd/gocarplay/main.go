@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,10 @@ import (
 	"github.com/mzyy94/gocarplay/link"
 	"github.com/mzyy94/gocarplay/protocol"
 )
+
+//go:embed *.js
+//go:embed *.html
+var folder embed.FS
 
 type deviceSize struct {
 	Width  int32 `json:"width"`
@@ -192,6 +197,6 @@ func startCarPlay(data []byte) error {
 func main() {
 	log.Println("http://localhost:8001")
 	http.HandleFunc("/connect", webRTCOfferHandler)
-	http.Handle("/", http.FileServer(http.Dir("./")))
+	http.Handle("/", http.FileServer(http.FS(folder)))
 	log.Fatal(http.ListenAndServe(":8001", nil))
 }

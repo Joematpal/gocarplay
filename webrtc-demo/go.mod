@@ -8,7 +8,9 @@ require (
 )
 
 require (
+	github.com/google/gousb v1.1.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40 // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.0.13 // indirect
 	github.com/pion/ice/v2 v2.1.18 // indirect
@@ -25,7 +27,6 @@ require (
 	github.com/pion/transport v0.13.0 // indirect
 	github.com/pion/turn/v2 v2.0.6 // indirect
 	github.com/pion/udp v0.1.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871 // indirect
 	golang.org/x/net v0.0.0-20211215060638-4ddde0e984e9 // indirect
 	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
