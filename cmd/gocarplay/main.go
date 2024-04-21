@@ -29,11 +29,16 @@ var (
 )
 
 func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+	in, out, _, err := link.Connect()
+	if err != nil {
+		return nil, err
+	}
+
 	lnk, err := link.New(
 		link.WithDPI(160),
 		link.WithFPS(fps),
-		link.WithReader(),
-		link.WithWriter(),
+		link.WithReader(in),
+		link.WithWriter(out),
 		link.WithScreenSize(size),
 	)
 	if err != nil {
