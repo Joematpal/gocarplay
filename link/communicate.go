@@ -8,8 +8,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/google/gousb"
 	"github.com/mzyy94/gocarplay/protocol"
+	"golang.org/x/sync/errgroup"
 )
 
 // formerly deviceTouch
@@ -24,6 +24,13 @@ type ScreenSize struct {
 	Height int32 `json:"height"`
 }
 
+type Logger interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
 type Link struct {
 	o          io.Writer
 	i          io.Reader
@@ -31,6 +38,8 @@ type Link struct {
 	ctx        context.Context
 	fps        int32
 	dpi        int32
+	logger     Logger
+	cancel     context.CancelFunc
 }
 
 func New(opts ...Option) (*Link, error) {
@@ -40,15 +49,84 @@ func New(opts ...Option) (*Link, error) {
 			return nil, err
 		}
 	}
-	go l.start(l.screenSize.Width, l.screenSize.Height, l.fps, l.dpi)
+
+	if err := l.isValid(); err != nil {
+		return nil, err
+	}
+
+	l.ctx, l.cancel = context.WithCancel(l.ctx)
+
+	l.Send(&protocol.SendFile{FileName: "/tmp/screen_dpi\x00", Content: intToByte(l.dpi)})
+	l.Send(&protocol.Open{Width: l.screenSize.Width, Height: l.screenSize.Height, VideoFrameRate: l.fps, Format: 5, PacketMax: 4915200, IBoxVersion: 2, PhoneWorkMode: 2})
+
+	l.Send(&protocol.ManufacturerInfo{A: 0, B: 0})
+	l.Send(&protocol.SendFile{FileName: "/tmp/night_mode\x00", Content: intToByte(1)})
+	l.Send(&protocol.SendFile{FileName: "/tmp/hand_drive_mode\x00", Content: intToByte(1)})
+	l.Send(&protocol.SendFile{FileName: "/tmp/charge_mode\x00", Content: intToByte(0)})
+	l.Send(&protocol.SendFile{FileName: "/tmp/box_name\x00", Content: bytes.NewBufferString("BoxName").Bytes()})
+
+	eg, _ := errgroup.WithContext(l.ctx)
+	eg.Go(func() error {
+		return l.heartBeat(l.screenSize.Width, l.screenSize.Height, l.fps, l.dpi)
+	})
+
+	go func() {
+		if err := eg.Wait(); err != nil {
+			l.Error("err group wait", "error", err.Error())
+
+		}
+	}()
 
 	return l, nil
 }
 
-var epIn io.Reader = &gousb.InEndpoint{}
-var epOut io.Writer = &gousb.OutEndpoint{}
-var ctx context.Context
-var Done func()
+func (l *Link) isValid() error {
+	if l.o == nil {
+		return errors.New("empty out source")
+	}
+	if l.i == nil {
+		return errors.New("empty in source")
+	}
+	if l.screenSize.Height == 0 && l.screenSize.Width == 0 {
+		return errors.New("empty screen size")
+	}
+	if l.fps == 0 {
+		return errors.New("empty fps")
+	}
+	if l.dpi == 0 {
+		return errors.New("empty dpi")
+	}
+	if l.ctx == nil {
+		return errors.New("empty ctx")
+	}
+	return nil
+}
+
+func (l *Link) Debug(msg string, args ...any) {
+	if l.logger != nil {
+		l.logger.Debug(msg, args...)
+	}
+}
+func (l *Link) Info(msg string, args ...any) {
+	if l.logger != nil {
+		l.logger.Info(msg, args...)
+	}
+}
+func (l *Link) Warn(msg string, args ...any) {
+	if l.logger != nil {
+		l.logger.Warn(msg, args...)
+	}
+}
+func (l *Link) Error(msg string, args ...any) {
+	if l.logger != nil {
+		l.logger.Error(msg, args...)
+	}
+}
+
+// var epIn io.Reader = &gousb.InEndpoint{}
+// var epOut io.Writer = &gousb.OutEndpoint{}
+// var ctx context.Context
+// var Done func()
 
 // func Init() error {
 // 	var err error
@@ -66,30 +144,27 @@ func intToByte(data int32) []byte {
 	return buf.Bytes()
 }
 
-func (l *Link) start(width, height, fps, dpi int32) {
-	l.Send(&protocol.SendFile{FileName: "/tmp/screen_dpi\x00", Content: intToByte(dpi)})
-	l.Send(&protocol.Open{Width: width, Height: height, VideoFrameRate: fps, Format: 5, PacketMax: 4915200, IBoxVersion: 2, PhoneWorkMode: 2})
-
-	l.Send(&protocol.ManufacturerInfo{A: 0, B: 0})
-	l.Send(&protocol.SendFile{FileName: "/tmp/night_mode\x00", Content: intToByte(1)})
-	l.Send(&protocol.SendFile{FileName: "/tmp/hand_drive_mode\x00", Content: intToByte(1)})
-	l.Send(&protocol.SendFile{FileName: "/tmp/charge_mode\x00", Content: intToByte(0)})
-	l.Send(&protocol.SendFile{FileName: "/tmp/box_name\x00", Content: bytes.NewBufferString("BoxName").Bytes()})
-
+func (l *Link) heartBeat(width, height, fps, dpi int32) error {
 	for {
-		l.Send(&protocol.Heartbeat{})
+		select {
+		case <-l.ctx.Done():
+			return nil
+		default:
+			if err := l.Send(&protocol.Heartbeat{}); err != nil {
+				defer l.cancel()
+				return err
+			}
+		}
 		time.Sleep(2 * time.Second)
 	}
 }
 
-func (l *Link) Communicate(onData func(interface{}), onError func(error)) error {
-	if epIn == nil {
-		return errors.New("Not connected")
-	}
+func (l *Link) Communicate(onData func(interface{})) error {
+
 	for {
-		received, err := ReceiveMessage(epIn, ctx)
+		received, err := ReceiveMessage(l.i, l.ctx)
 		if err != nil {
-			onError(err)
+
 		} else {
 			onData(received)
 		}

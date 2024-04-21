@@ -23,7 +23,7 @@ func ReceiveMessage(r io.Reader, ctx context.Context) (interface{}, error) {
 	buf = make([]byte, hdr.Length)
 
 	if hdr.Length > 0 {
-		num, err = epIn.Read(buf)
+		num, err = r.Read(buf)
 		if err != nil || num != len(buf) {
 			return nil, err
 		}

@@ -1,13 +1,15 @@
 package link
 
 import (
+	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/google/gousb"
 )
 
-func Connect() (*gousb.InEndpoint, *gousb.OutEndpoint, func(), error) {
+func Connect(ctx context.Context) (*gousb.InEndpoint, *gousb.OutEndpoint, error) {
 	cleanTask := make([]func(), 0)
 	defer func() {
 		for _, task := range cleanTask {
@@ -15,8 +17,9 @@ func Connect() (*gousb.InEndpoint, *gousb.OutEndpoint, func(), error) {
 		}
 	}()
 
-	ctx := gousb.NewContext()
-	cleanTask = append(cleanTask, func() { ctx.Close() })
+	usbctx := gousb.NewContext()
+
+	cleanTask = append(cleanTask, func() { usbctx.Close() })
 
 	var (
 		dev       *gousb.Device
@@ -25,14 +28,14 @@ func Connect() (*gousb.InEndpoint, *gousb.OutEndpoint, func(), error) {
 	)
 
 	for {
-		dev, err = ctx.OpenDeviceWithVIDPID(0x1314, 0x1520)
+		dev, err = usbctx.OpenDeviceWithVIDPID(0x1314, 0x1520)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		if dev == nil {
 			waitCount--
 			if waitCount < 0 {
-				return nil, nil, nil, errors.New("Could not find a device")
+				return nil, nil, errors.New("Could not find a device")
 			}
 			time.Sleep(3 * time.Second)
 			continue
@@ -43,26 +46,31 @@ func Connect() (*gousb.InEndpoint, *gousb.OutEndpoint, func(), error) {
 
 	intf, done, err := dev.DefaultInterface()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	cleanTask = append(cleanTask, done)
 
 	epOut, err := intf.OutEndpoint(1)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	epIn, err := intf.InEndpoint(1)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	closeTask := make([]func(), len(cleanTask))
 	copy(closeTask, cleanTask)
 	cleanTask = nil
 
-	return epIn, epOut, func() {
-		for _, task := range closeTask {
-			task()
+	go func() {
+		for range ctx.Done() {
+			for _, task := range closeTask {
+				task()
+			}
+			log.Println("done")
 		}
-	}, nil
+	}()
+
+	return epIn, epOut, nil
 }

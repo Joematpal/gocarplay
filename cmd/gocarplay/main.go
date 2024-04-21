@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/binary"
 	"encoding/json"
@@ -29,7 +30,8 @@ var (
 )
 
 func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
-	in, out, _, err := link.Connect()
+	// todo make this listen from kill or term signal
+	in, out, err := link.Connect(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +46,7 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 	if err != nil {
 		return nil, err
 	}
+
 	// WebRTC setup
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
@@ -186,8 +189,6 @@ func startCarPlay(lnk *link.Link, data []byte) error {
 		default:
 			log.Printf("[onData] %#v", data)
 		}
-	}, func(err error) {
-		log.Fatalf("[ERROR] %#v", err)
 	})
 
 	return nil

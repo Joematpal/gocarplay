@@ -1,6 +1,9 @@
 package link
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 type Option interface {
 	apply(*Link) error
@@ -18,27 +21,45 @@ func WithWriter(o io.Writer) Option {
 		return nil
 	})
 }
+
 func WithReader(i io.Reader) Option {
 	return applyOptionFunc(func(l *Link) error {
 		l.i = i
 		return nil
 	})
 }
+
 func WithScreenSize(screenSize ScreenSize) Option {
 	return applyOptionFunc(func(l *Link) error {
 		l.screenSize = screenSize
 		return nil
 	})
 }
+
 func WithFPS(fps int32) Option {
 	return applyOptionFunc(func(l *Link) error {
 		l.fps = fps
 		return nil
 	})
 }
+
 func WithDPI(dpi int32) Option {
 	return applyOptionFunc(func(l *Link) error {
 		l.dpi = dpi
+		return nil
+	})
+}
+
+func WithContext(ctx context.Context) Option {
+	return applyOptionFunc(func(l *Link) error {
+		l.ctx = ctx
+		return nil
+	})
+}
+
+func WithLogger(logger Logger) Option {
+	return applyOptionFunc(func(l *Link) error {
+		l.logger = logger
 		return nil
 	})
 }
