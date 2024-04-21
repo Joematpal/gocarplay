@@ -70,7 +70,7 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 
 	stats, ok := pc.GetStats().GetConnectionStats(pc)
 	if !ok {
-		stats.ID = "unknoown"
+		stats.ID = "unknown"
 	}
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
