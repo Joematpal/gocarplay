@@ -13,8 +13,8 @@ Works with following devices:
 ## Demo
 
 ```
-cd webrtc-demo
-go run .
+
+go run ./cmd/gocarplay
 ```
 
 ## License

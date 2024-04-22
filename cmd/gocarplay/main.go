@@ -37,6 +37,7 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 	}
 
 	lnk, err := link.New(
+		link.WithContext(context.Background()),
 		link.WithDPI(160),
 		link.WithFPS(fps),
 		link.WithReader(in),
@@ -187,7 +188,7 @@ func startCarPlay(lnk *link.Link, data []byte) error {
 				audioDataChannel.Send(append(buf.Bytes(), data.Data...))
 			}
 		default:
-			log.Printf("[onData] %#v", data)
+			log.Printf("[onData] %T TYPE:: %#v", data, data)
 		}
 	})
 

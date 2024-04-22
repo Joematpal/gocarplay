@@ -87,9 +87,9 @@ func (l *Link) isValid() error {
 	if l.i == nil {
 		return errors.New("empty in source")
 	}
-	if l.screenSize.Height == 0 && l.screenSize.Width == 0 {
-		return errors.New("empty screen size")
-	}
+	// if l.screenSize.Height == 0 && l.screenSize.Width == 0 {
+	// 	return errors.New("empty screen size")
+	// }
 	if l.fps == 0 {
 		return errors.New("empty fps")
 	}
