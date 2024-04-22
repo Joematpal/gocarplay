@@ -57,7 +57,7 @@ func New(opts ...Option) (*Link, error) {
 	l.ctx, l.cancel = context.WithCancel(l.ctx)
 
 	l.Send(&protocol.SendFile{FileName: "/tmp/screen_dpi\x00", Content: intToByte(l.dpi)})
-	l.Send(&protocol.Open{Width: l.screenSize.Width, Height: l.screenSize.Height, VideoFrameRate: l.fps, Format: 5, PacketMax: 4915200, IBoxVersion: 2, PhoneWorkMode: 2})
+	// l.Send(&protocol.Open{Width: l.screenSize.Width, Height: l.screenSize.Height, VideoFrameRate: l.fps, Format: 5, PacketMax: 4915200, IBoxVersion: 2, PhoneWorkMode: 2})
 
 	l.Send(&protocol.ManufacturerInfo{A: 0, B: 0})
 	l.Send(&protocol.SendFile{FileName: "/tmp/night_mode\x00", Content: intToByte(1)})
@@ -67,13 +67,12 @@ func New(opts ...Option) (*Link, error) {
 
 	eg, _ := errgroup.WithContext(l.ctx)
 	eg.Go(func() error {
-		return l.heartBeat(l.screenSize.Width, l.screenSize.Height, l.fps, l.dpi)
+		return l.heartBeat()
 	})
 
 	go func() {
 		if err := eg.Wait(); err != nil {
 			l.Error("err group wait", "error", err.Error())
-
 		}
 	}()
 
@@ -82,22 +81,22 @@ func New(opts ...Option) (*Link, error) {
 
 func (l *Link) isValid() error {
 	if l.o == nil {
-		return errors.New("empty out source")
+		return errors.New("empty output")
 	}
 	if l.i == nil {
-		return errors.New("empty in source")
+		return errors.New("empty input")
 	}
 	// if l.screenSize.Height == 0 && l.screenSize.Width == 0 {
 	// 	return errors.New("empty screen size")
 	// }
 	if l.fps == 0 {
-		return errors.New("empty fps")
+		return ErrEmptyFPS
 	}
 	if l.dpi == 0 {
-		return errors.New("empty dpi")
+		return ErrEmptyDPI
 	}
 	if l.ctx == nil {
-		return errors.New("empty ctx")
+		return ErrEmptyContext
 	}
 	return nil
 }
@@ -123,6 +122,15 @@ func (l *Link) Error(msg string, args ...any) {
 	}
 }
 
+func (l *Link) SetScreenSize(screenSize ScreenSize) error {
+	l.screenSize = screenSize
+	if l.fps == 0 {
+		return errors.New("empty fps")
+	}
+	return l.Send(&protocol.Open{Width: l.screenSize.Width, Height: l.screenSize.Height, VideoFrameRate: l.fps, Format: 5, PacketMax: 4915200, IBoxVersion: 2, PhoneWorkMode: 2})
+
+}
+
 // var epIn io.Reader = &gousb.InEndpoint{}
 // var epOut io.Writer = &gousb.OutEndpoint{}
 // var ctx context.Context
@@ -144,7 +152,7 @@ func intToByte(data int32) []byte {
 	return buf.Bytes()
 }
 
-func (l *Link) heartBeat(width, height, fps, dpi int32) error {
+func (l *Link) heartBeat() error {
 	for {
 		select {
 		case <-l.ctx.Done():
@@ -160,7 +168,9 @@ func (l *Link) heartBeat(width, height, fps, dpi int32) error {
 }
 
 func (l *Link) Communicate(onData func(interface{})) error {
-
+	if l.screenSize.Height == 0 && l.screenSize.Width == 0 {
+		return ErrEmptyScreenSize
+	}
 	for {
 		received, err := ReceiveMessage(l.i, l.ctx)
 		if err != nil {
@@ -173,7 +183,7 @@ func (l *Link) Communicate(onData func(interface{})) error {
 
 func (l *Link) Send(data interface{}) error {
 	if l.o == nil {
-		return errors.New("Not connected")
+		return ErrNotConnected
 	}
 	return SendMessage(l.o, data)
 }

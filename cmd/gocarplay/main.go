@@ -30,6 +30,7 @@ var (
 )
 
 func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+	fmt.Println("setupwebrtc")
 	// todo make this listen from kill or term signal
 	in, out, err := link.Connect(context.Background())
 	if err != nil {
@@ -105,6 +106,7 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 	}
 
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
+		fmt.Println("d.Label()", d.Label())
 		switch d.Label() {
 		case "touch":
 			d.OnMessage(func(msg webrtc.DataChannelMessage) {
@@ -139,6 +141,7 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 }
 
 func webRTCOfferHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("webrtcofferhandler")
 	var offer webrtc.SessionDescription
 	if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -170,6 +173,9 @@ func startCarPlay(lnk *link.Link, data []byte) error {
 	if err := json.Unmarshal(data, &size); err != nil {
 		return err
 	}
+
+	fmt.Println("start car play")
+	lnk.SetScreenSize(link.ScreenSize{})
 
 	go lnk.Communicate(func(data interface{}) {
 		switch data := data.(type) {
