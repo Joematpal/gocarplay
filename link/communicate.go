@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/mzyy94/gocarplay/protocol"
@@ -167,14 +168,14 @@ func (l *Link) heartBeat() error {
 	}
 }
 
-func (l *Link) Communicate(onData func(interface{})) error {
+func (l *Link) Communicate(onData func(any)) error {
 	if l.screenSize.Height == 0 && l.screenSize.Width == 0 {
 		return ErrEmptyScreenSize
 	}
 	for {
 		received, err := ReceiveMessage(l.i, l.ctx)
 		if err != nil {
-
+			slog.Error("recieve message", "error", err.Error())
 		} else {
 			onData(received)
 		}

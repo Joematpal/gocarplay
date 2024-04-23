@@ -3,23 +3,18 @@ package link
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/google/gousb"
 )
 
 func Connect(ctx context.Context) (*gousb.InEndpoint, *gousb.OutEndpoint, error) {
-	cleanTask := make([]func(), 0)
-	defer func() {
-		for _, task := range cleanTask {
-			task()
-		}
-	}()
+	cleanTask := make([]func() error, 0)
 
 	usbctx := gousb.NewContext()
 
-	cleanTask = append(cleanTask, func() { usbctx.Close() })
+	cleanTask = append(cleanTask, func() error { return usbctx.Close() })
 
 	var (
 		dev       *gousb.Device
@@ -40,7 +35,7 @@ func Connect(ctx context.Context) (*gousb.InEndpoint, *gousb.OutEndpoint, error)
 			time.Sleep(3 * time.Second)
 			continue
 		}
-		cleanTask = append(cleanTask, func() { dev.Close() })
+		cleanTask = append(cleanTask, func() error { return dev.Close() })
 		break
 	}
 
@@ -48,7 +43,7 @@ func Connect(ctx context.Context) (*gousb.InEndpoint, *gousb.OutEndpoint, error)
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanTask = append(cleanTask, done)
+	cleanTask = append(cleanTask, func() error { done(); return nil })
 
 	epOut, err := intf.OutEndpoint(1)
 	if err != nil {
@@ -59,16 +54,17 @@ func Connect(ctx context.Context) (*gousb.InEndpoint, *gousb.OutEndpoint, error)
 		return nil, nil, err
 	}
 
-	closeTask := make([]func(), len(cleanTask))
+	closeTask := make([]func() error, len(cleanTask))
 	copy(closeTask, cleanTask)
 	cleanTask = nil
 
 	go func() {
 		for range ctx.Done() {
 			for _, task := range closeTask {
-				task()
+				if err := task(); err != nil {
+					slog.Error("close tasks", "error", err.Error())
+				}
 			}
-			log.Println("done")
 		}
 	}()
 

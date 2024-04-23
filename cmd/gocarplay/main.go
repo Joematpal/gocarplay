@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/pion/webrtc/v3"
@@ -36,14 +38,19 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 	if err != nil {
 		return nil, err
 	}
+	testFile, err := os.Create("./test_file.txt")
+	if err != nil {
+		return nil, err
+	}
+	in2 := io.MultiReader(in, testFile)
 
 	lnk, err := link.New(
 		link.WithContext(context.Background()),
 		link.WithDPI(160),
 		link.WithFPS(fps),
-		link.WithReader(in),
+		link.WithReader(in2),
 		link.WithWriter(out),
-		link.WithScreenSize(size),
+		// link.WithScreenSize(size),
 	)
 	if err != nil {
 		return nil, err
@@ -141,7 +148,6 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 }
 
 func webRTCOfferHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("webrtcofferhandler")
 	var offer webrtc.SessionDescription
 	if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -175,12 +181,19 @@ func startCarPlay(lnk *link.Link, data []byte) error {
 	}
 
 	fmt.Println("start car play")
-	lnk.SetScreenSize(link.ScreenSize{})
-
+	if err := lnk.SetScreenSize(size); err != nil {
+		return err
+	}
+	frameCount := 0
+	start := time.Now()
 	go lnk.Communicate(func(data interface{}) {
 		switch data := data.(type) {
 		case *protocol.VideoData:
 			duration := time.Duration((float32(1) / float32(fps)) * float32(time.Second))
+			frameCount++
+			secs := time.Since(start).Seconds()
+			fmt.Println("frames", float64(frameCount)/secs, "frameCount", frameCount, "secs", secs)
+
 			videoTrack.WriteSample(media.Sample{Data: data.Data, Duration: duration})
 		case *protocol.AudioData:
 			if len(data.Data) == 0 {
