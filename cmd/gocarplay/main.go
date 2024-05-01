@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/mzyy94/gocarplay/internal/dist"
 	"github.com/mzyy94/gocarplay/internal/server"
 	"github.com/mzyy94/gocarplay/link"
 )
@@ -61,6 +62,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/connect", connectHander)
+	mux.Handle("/", dist.UIHandler)
 
 	srvr := http.Server{
 		Addr:    ":8001",
