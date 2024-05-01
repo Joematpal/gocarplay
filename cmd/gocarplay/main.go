@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/pion/webrtc/v3"
@@ -21,25 +24,38 @@ import (
 //go:embed *.html
 var folder embed.FS
 
-type deviceSize struct {
-	Width  int32 `json:"width"`
-	Height int32 `json:"height"`
-}
-
-type deviceTouch struct {
-	X      float32 `json:"x"`
-	Y      float32 `json:"y"`
-	Action int32   `json:"action"`
-}
-
 var (
 	videoTrack       *webrtc.TrackLocalStaticSample
 	audioDataChannel *webrtc.DataChannel
-	size             deviceSize
+	size             link.ScreenSize
 	fps              int32 = 25
 )
 
 func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+	fmt.Println("setupwebrtc")
+	// todo make this listen from kill or term signal
+	in, out, err := link.Connect(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	testFile, err := os.Create("./test_file.txt")
+	if err != nil {
+		return nil, err
+	}
+	in2 := io.MultiReader(in, testFile)
+
+	lnk, err := link.New(
+		link.WithContext(context.Background()),
+		link.WithDPI(160),
+		link.WithFPS(fps),
+		link.WithReader(in2),
+		link.WithWriter(out),
+		// link.WithScreenSize(size),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	// WebRTC setup
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
@@ -63,7 +79,7 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 
 	stats, ok := pc.GetStats().GetConnectionStats(pc)
 	if !ok {
-		stats.ID = "unknoown"
+		stats.ID = "unknown"
 	}
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -97,14 +113,15 @@ func setupWebRTC(offer webrtc.SessionDescription) (*webrtc.SessionDescription, e
 	}
 
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
+		fmt.Println("d.Label()", d.Label())
 		switch d.Label() {
 		case "touch":
 			d.OnMessage(func(msg webrtc.DataChannelMessage) {
-				sendTouch(msg.Data)
+				sendTouch(lnk, msg.Data)
 			})
 		case "start":
 			d.OnMessage(func(msg webrtc.DataChannelMessage) {
-				if err := startCarPlay(msg.Data); err != nil {
+				if err := startCarPlay(lnk, msg.Data); err != nil {
 					log.Fatalf("start car play: %v", err)
 				}
 			})
@@ -149,28 +166,34 @@ func webRTCOfferHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&answer)
 }
 
-func sendTouch(data []byte) {
-	var touch deviceTouch
+func sendTouch(lnk *link.Link, data []byte) {
+	var touch link.ScreenTouch
 	if err := json.Unmarshal(data, &touch); err != nil {
 		return
 	}
 
-	link.SendData(&protocol.Touch{X: uint32(touch.X * 10000 / float32(size.Width)), Y: uint32(touch.Y * 10000 / float32(size.Height)), Action: protocol.TouchAction(touch.Action)})
+	lnk.Send(&protocol.Touch{X: uint32(touch.X * 10000 / float32(size.Width)), Y: uint32(touch.Y * 10000 / float32(size.Height)), Action: protocol.TouchAction(touch.Action)})
 }
 
-func startCarPlay(data []byte) error {
+func startCarPlay(lnk *link.Link, data []byte) error {
 	if err := json.Unmarshal(data, &size); err != nil {
 		return err
 	}
 
-	if err := link.Init(); err != nil {
+	fmt.Println("start car play")
+	if err := lnk.SetScreenSize(size); err != nil {
 		return err
 	}
-
-	go link.Communicate(func(data interface{}) {
+	frameCount := 0
+	start := time.Now()
+	go lnk.Communicate(func(data interface{}) {
 		switch data := data.(type) {
 		case *protocol.VideoData:
 			duration := time.Duration((float32(1) / float32(fps)) * float32(time.Second))
+			frameCount++
+			secs := time.Since(start).Seconds()
+			fmt.Println("frames", float64(frameCount)/secs, "frameCount", frameCount, "secs", secs)
+
 			videoTrack.WriteSample(media.Sample{Data: data.Data, Duration: duration})
 		case *protocol.AudioData:
 			if len(data.Data) == 0 {
@@ -184,13 +207,10 @@ func startCarPlay(data []byte) error {
 				audioDataChannel.Send(append(buf.Bytes(), data.Data...))
 			}
 		default:
-			log.Printf("[onData] %#v", data)
+			log.Printf("[onData] %T TYPE:: %#v", data, data)
 		}
-	}, func(err error) {
-		log.Fatalf("[ERROR] %#v", err)
 	})
 
-	go link.Start(size.Width, size.Height, fps, 160)
 	return nil
 }
 

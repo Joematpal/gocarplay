@@ -28,6 +28,7 @@ pc.oniceconnectionstatechange = () => {
 };
 
 pc.onicecandidate = (event) => {
+  console.log("ice candidate", event)
   if (event.candidate == null) {
     fetch("/connect", {
       method: "POST",
