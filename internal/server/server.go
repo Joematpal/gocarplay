@@ -178,6 +178,7 @@ func (s *Server) setupWebRTC(ctx context.Context, offer webrtc.SessionDescriptio
 		SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
 		RTCPFeedback: nil,
 	}
+
 	if s.videoTrack, err = webrtc.NewTrackLocalStaticSample(videoCodec, "video", "video"); err != nil {
 		return nil, err
 	}
