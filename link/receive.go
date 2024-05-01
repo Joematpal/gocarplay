@@ -2,15 +2,15 @@ package link
 
 import (
 	"context"
+	"io"
 
-	"github.com/google/gousb"
 	"github.com/mzyy94/gocarplay/protocol"
 )
 
-func ReceiveMessage(epIn *gousb.InEndpoint, ctx context.Context) (interface{}, error) {
+func ReceiveMessage(r io.Reader, ctx context.Context) (interface{}, error) {
 	buf := make([]byte, 16)
 	var hdr protocol.Header
-	num, err := epIn.ReadContext(ctx, buf)
+	num, err := r.Read(buf)
 	if err != nil || num != len(buf) {
 		return nil, err
 	}
@@ -23,7 +23,7 @@ func ReceiveMessage(epIn *gousb.InEndpoint, ctx context.Context) (interface{}, e
 	buf = make([]byte, hdr.Length)
 
 	if hdr.Length > 0 {
-		num, err = epIn.ReadContext(ctx, buf)
+		num, err = r.Read(buf)
 		if err != nil || num != len(buf) {
 			return nil, err
 		}

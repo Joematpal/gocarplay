@@ -1,11 +1,12 @@
 package link
 
 import (
-	"github.com/google/gousb"
+	"io"
+
 	"github.com/mzyy94/gocarplay/protocol"
 )
 
-func SendMessage(epOut *gousb.OutEndpoint, msg interface{}) error {
+func SendMessage(epOut io.Writer, msg interface{}) error {
 	buf, err := protocol.Marshal(msg)
 	if err != nil {
 		return err
